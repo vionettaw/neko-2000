@@ -1,0 +1,812 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Visual Display</title>
+  <style>
+    @font-face {
+      font-family: "OracleMono";
+      src: url("/public/fonts/Neubahn.ttf") format("truetype");
+      font-display: swap;
+    }
+
+    * {
+      color: #00ff08;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #000;
+    }
+
+    /* Center canvas, no scrolling; canvas will be sized to fit window */
+    body {
+      font-family: OracleMono, ui-monospace, SFMono-Regular, Menlo, Monaco, "Courier New", monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Background video DOM node (we now also draw it into p5) */
+    .bg-video {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      min-width: 100%;
+      min-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: cover;
+      z-index: -1;
+      filter: grayscale(1) contrast(1.1) brightness(0.7);
+    }
+
+    /* Canvas uses its own p5 size; just ensure it never exceeds viewport */
+    canvas {
+      display: block;
+      max-width: 100vw;
+      max-height: 100vh;
+      width: auto;
+      height: auto;
+    }
+  </style>
+
+  <!-- preload font -->
+  <link rel="preload" href="/fonts/Neubahn.ttf" as="font" type="font/ttf" crossorigin>
+
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+</head>
+
+<body>
+  <!-- 🔥 Background video source -->
+  <video
+    id="bg-video"
+    class="bg-video"
+    autoplay
+    muted
+    loop
+    playsinline
+  >
+    <source src="/videos/neko.mp4" type="video/mp4" />
+  </video>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <script>
+    // --- socket setup ---
+    const params = new URLSearchParams(location.search);
+    const wsURL = params.get('ws') || location.origin;
+    const ioClient = io(wsURL, { transports: ['websocket', 'polling'] });
+
+    // 🔮 YOUR MANUAL FORTUNES (one line = one fortune)
+    const MANUAL_FORTUNES = [
+      "You work too hard. For nothing.",
+      "You glow because stress kill you.",
+      "Love yourself, no one want that job.",
+      "Let go, lose all. Namaste.",
+      "Smile. People smell your fear.",
+      "You grow? Only your anxiety.",
+      "Think positive. Be delulu.",
+      "Keep going. Worse coming.",
+      "Dream big. Rent bigger.",
+      "You special? Same like everybody.",
+      "Work harder. Approval not free.",
+      "You “grow” but only eyebag big.",
+      "Stay hopeful. Delulu is character.",
+      "Stay positive. Ignorance burn less calorie.",
+      "You want progress, desk become coffin.",
+      "You chase money, job give experience only.",
+      "You want rich, industry give “passion.”",
+      "You want simple life, hahaha",
+      "Work hard, boss forget your name.",
+      "Work harder, die faster.",
+      "Want happy, pay first.",
+      "Want peace, get panic.",
+      "Life give you fufufafa.",
+      "Destiny reply “fufufafa only.”",
+      "Don’t Worry, Really, lol.",
+      "Want money. Get stress.",
+
+      "Stop pressing button. I scared.",
+      "I’m tired. You also tired.",
+      "Just enjoy life, why ask? Life not enjoy you.",
+      "Nope. Nope. Nope. Still nope.",
+      "Why press again? Expect magic?",
+      "You press button like rent free.",
+      "Button cry. Please stop.",
+      "You press button, problem multiply.",
+      "Calm down. Button not your therapist.",
+      "Stop pressing. You Drain our WIFI.",
+      "Your finger strong, your life not.",
+      "You press button, I lose hope.",
+      "Stop pressing. Touch grass instead.",
+      "Button tired. You tired. Everyone tired.",
+      "Press again and I scream.",
+      "Press less. Breathe more.",
+      "One press good. Two press bad.",
+      "No More Sir, Tired.",
+
+      "Hidupmu kabur, nasib tidur.",
+      "Rejeki telat, masalah dulu.",
+      "Harapan tinggi, hasil kentang.",
+      "Jalan hidupmu muter-muter.",
+      "Mau sukses? berdoa aja",
+      "Mimpi besar, dompet kecil.",
+      "Ambisi gede, nggak realistis.",
+      "Zonk mulu ya, haha.",
+      "Nasibmu buffering selamanya.",
+      "Harapan ON, hasil OFF.",
+      "Kerja lu rajin, hidup bercanda.",
+      "Hiduplu banyak gaya, dompet nyerah.",
+      "Buang waktu aja disini. Kerja.",
+      "Mukamu lelah, tidur aja nanti.",
+      "Mimpimu terlalu tinggi.",
+      "Mau simple, gayamu ribet.",
+      "Nasibmu mode “random.”",
+      "Harapan banyak, hasil dikit.",
+      "Mau jelas, dunia blur."
+    ];
+
+    // chance to use manual fortune instead of AI (0.0–1.0)
+    const MANUAL_PROB = 0.4;
+
+    // --- p5 font handle ---
+    let oracleFont;
+
+    // --- video background handle ---
+    let bgVideoEl;
+
+    // --- state ---
+    // modes: "idle" (SEARCHING…), "loading" (glitch), "show" (final text)
+    let mode = "idle";
+    let finalText = "";
+    let baseTime = 0;
+
+    // typewriter state for SHOW
+    let typingIdx = 0;
+    let typedText = "";
+    let lastTypeStep = 0;
+    let TYPE_DELAY = 26; // ms per char
+
+    // colors
+    const FG = [34, 255, 0];
+    const BG = [0, 0, 0];
+
+    // loading effect state
+    const PAD = 50;
+    const pool = [
+      "optimizing", "buffering", "indexing", "summoning",
+      "distilling", "hydrating", "coalescing", "compiling",
+      "rerendering", "manifesting", "vibesyncing", "reframing"
+    ];
+    let loadTarget = "";
+    let loadShown = "";
+    let lastSwap = 0;
+    let lastType = 0;
+    const swapDelay = 360;
+    const typeDelay = 16;
+
+    // scale control via URL (?scale=0.25)
+    const scaleParam = parseFloat(params.get("scale"));
+    const SIZE_SCALE = isNaN(scaleParam) ? 0.25 : scaleParam;
+
+    // line-height control via URL (?lh=0.8)
+    const lhParam = parseFloat(params.get("lh"));
+    const LINE_HEIGHT_MULT = isNaN(lhParam) ? 0.8 : lhParam;
+
+    // ====== CRT / TERMINAL EFFECT STATE ======
+    let screenG;      // main content buffer
+    let overlayG;     // scanlines + vignette
+    let noiseG;       // film noise
+    let noiseNeedsRedraw = true;
+
+    let flicker = 0;
+    let jitterX = 0;
+    let chromaShift = 0;
+    let cursorOn = true;
+    let lastCursor = 0;
+
+    // bezel / mask
+    let cornerR = 32;
+    let bezelGlow = 42;
+
+    // TEXT NOISE for dithered fortune text
+    let textNoiseLayer;
+
+    // TRANSITIONS
+    let trans = { active: false, from: "idle", to: "idle", t: 1, dur: 420 };
+
+    function startTransition(nextMode) {
+      if (mode === nextMode) return;
+      trans.active = true;
+      trans.from = mode;
+      trans.to = nextMode;
+      trans.t = 0;
+    }
+
+    function transitionStep(dt) {
+      if (!trans.active) return;
+      trans.t += dt / trans.dur;
+      if (trans.t >= 1) {
+        trans.active = false;
+        mode = trans.to;
+      }
+    }
+
+    // 🔔 IDLE TIMEOUT: go back to idle if no activity for 1 minute
+    let idleTimer = null;
+    const IDLE_TIMEOUT_MS = 60 * 1000; // 1 minute
+
+    function resetIdleTimer() {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        startTransition("idle");
+      }, IDLE_TIMEOUT_MS);
+    }
+
+    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)] }
+    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+    function scramble(word) {
+      const noise = "!@#$%^&*()_+-=[]{};:,.?/\\|~ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+      let out = "";
+      for (let i = 0; i < word.length; i++) {
+        out += Math.random() < 0.45 ? word[i] : noise[Math.floor(Math.random() * noise.length)];
+      }
+      return out;
+    }
+
+    function primeLoading() {
+      loadTarget = scramble(pick(pool));
+      loadShown = "";
+      lastSwap = millis();
+      lastType = millis();
+    }
+
+    // ====== p5 SIZING (9:16 that always fits the window) ======
+    const TARGET_RATIO = 9 / 16; // width / height
+
+    function computeCanvasSize() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const windowRatio = w / h;
+
+      let canvasW, canvasH;
+      if (windowRatio > TARGET_RATIO) {
+        // window is "wider" than 9:16 → height limits
+        canvasH = h;
+        canvasW = h * TARGET_RATIO;
+      } else {
+        // window is "narrower" → width limits
+        canvasW = w;
+        canvasH = w / TARGET_RATIO;
+      }
+      return { w: Math.floor(canvasW), h: Math.floor(canvasH) };
+    }
+
+    function preload() {
+      oracleFont = loadFont('/fonts/Neubahn.ttf');
+    }
+
+    function setup() {
+      const { w, h } = computeCanvasSize();
+      createCanvas(w, h);
+      pixelDensity(1);
+
+      textFont(oracleFont);
+      textAlign(LEFT, TOP);
+      noStroke();
+
+      colorMode(RGB, 255, 255, 255, 255);
+
+      // 🔥 grab the <video> element
+      bgVideoEl = document.getElementById('bg-video');
+      if (bgVideoEl && bgVideoEl.play) {
+        bgVideoEl.play().catch(() => {
+          // autoplay might be blocked; it's fine, it will start when user interacts
+        });
+      }
+
+      makeBuffers();
+
+      // start idle timer on launch
+      resetIdleTimer();
+    }
+
+    function windowResized() {
+      const { w, h } = computeCanvasSize();
+      resizeCanvas(w, h);
+      makeBuffers();
+    }
+
+    function makeBuffers() {
+      cornerR = Math.floor(Math.min(width, height) * 0.06);
+
+      screenG = createGraphics(width, height);
+      screenG.pixelDensity(1);
+      screenG.textFont(oracleFont);
+      screenG.textAlign(LEFT, TOP);
+      screenG.noStroke();
+
+      overlayG = createGraphics(width, height);
+      overlayG.pixelDensity(1);
+      overlayG.clear();
+
+      // scanlines
+      overlayG.noStroke();
+      for (let y = 0; y < height; y += 2) {
+        const a = 36 + 6 * Math.sin(y * 0.02);
+        overlayG.fill(FG[0], FG[1], FG[2], a);
+        overlayG.rect(0, y, width, 1);
+      }
+
+      // vignette (dark bezel, reused in all states)
+      overlayG.noFill();
+      const steps = 20;
+      for (let i = 0; i < steps; i++) {
+        const t = i / (steps - 1);
+        const a = map(t, 0, 1, 0, 70);
+        overlayG.stroke(0, 0, 0, a);
+        overlayG.strokeWeight(2);
+        const padX = width * t * 0.055;
+        const padY = height * t * 0.055;
+        overlayG.rect(padX, padY, width - padX * 2, height - padY * 2, cornerR);
+      }
+
+      noiseG = createGraphics(width, height);
+      noiseG.pixelDensity(1);
+
+      textNoiseLayer = createGraphics(width, height);
+      textNoiseLayer.pixelDensity(1);
+      textNoiseLayer.textFont(oracleFont);
+    }
+
+    // ====== SOCKET: visual:state handling & timer reset ======
+    ioClient.on('visual:state', payload => {
+      if (!payload || !payload.cmd) return;
+
+      // any event from server = activity → reset idle timer
+      resetIdleTimer();
+
+      if (payload.cmd === 'loading') {
+        primeLoading();
+        startTransition("loading");
+        return;
+      }
+
+      if (payload.cmd === 'show') {
+        // choose between AI text and manual fortune
+        let chosen = (payload.text || "").trim();
+
+        const useManual =
+          !chosen || Math.random() < MANUAL_PROB;
+
+        if (useManual) {
+          chosen = pick(MANUAL_FORTUNES);
+        }
+
+        // 🔠 FORCE ALL CAPS FOR BOTH MANUAL & AI
+        finalText = String(chosen).trim().toUpperCase();
+
+        typingIdx = 0;
+        typedText = "";
+        lastTypeStep = millis();
+
+        startTransition("show");
+        return;
+      }
+    });
+
+    function draw() {
+      // base clear for the main canvas
+      background(BG[0], BG[1], BG[2]);
+
+      const dt = (typeof deltaTime !== 'undefined' ? deltaTime : 16);
+      baseTime += dt * 0.001;
+
+      const activePhase = trans.active ? trans.to : mode;
+
+      const flickerAmp = (activePhase === "show") ? 0.30 : 0.18;
+      const flickerBase = (activePhase === "show") ? 0.96 : 1.05;
+      flicker = flickerBase + (noise(frameCount * 0.012) - 0.5) * flickerAmp;
+
+      jitterX = (noise(frameCount * 0.07) - 0.5) * 5.8;
+      chromaShift = (noise(frameCount * 0.03) - 0.5) * 5.3;
+
+      if (millis() - lastCursor > 500) {
+        cursorOn = !cursorOn;
+        lastCursor = millis();
+      }
+
+      transitionStep(dt);
+
+      // --- render to offscreen buffer (screenG) ---
+      screenG.clear();
+
+      // 1) draw video as background if available
+      if (bgVideoEl && bgVideoEl.readyState >= 2) {
+        const ctx = screenG.drawingContext;
+        const vw = bgVideoEl.videoWidth || bgVideoEl.width || 1;
+        const vh = bgVideoEl.videoHeight || bgVideoEl.height || 1;
+        ctx.save();
+        ctx.drawImage(
+          bgVideoEl,
+          0, 0, vw, vh,
+          0, 0, screenG.width, screenG.height
+        );
+        ctx.restore();
+      } else {
+        // fallback: flat background if video not ready
+        screenG.background(BG[0], BG[1], BG[2]);
+      }
+
+      // 2) draw text / UI on top with jitter
+      screenG.push();
+      screenG.translate(jitterX, 0);
+
+      if (trans.active) {
+        const t = clamp(trans.t, 0, 1);
+        const aOut = (1 - t) * (1 - t);
+        const aIn = t * t;
+        renderPhase(screenG, trans.from, aOut);
+        renderPhase(screenG, trans.to, aIn);
+      } else {
+        renderPhase(screenG, mode, 1);
+      }
+      screenG.pop();
+
+      if (frameCount % 5 === 0) noiseNeedsRedraw = true;
+      if (noiseNeedsRedraw) redrawNoise();
+
+      sliceGlitch(screenG, activePhase);
+
+      compositeToCRT(screenG, overlayG, noiseG);
+    }
+
+    function renderPhase(g, which, alpha) {
+      g.push();
+      g.drawingContext.globalAlpha = alpha;
+      if (which === "idle") drawIdle(g);
+      else if (which === "loading") drawLoading(g);
+      else if (which === "show") drawShow(g);
+      g.pop();
+    }
+
+    // ----- IDLE -----
+    function drawIdle(g) {
+      const header = "VVERK";
+      const cursor = cursorOn ? "_" : " ";
+
+      const fs = Math.max(36, Math.min(width, height) * 0.98);
+
+      g.push();
+      g.textAlign(CENTER, CENTER);
+      g.textSize(fs);
+      g.fill(FG[0], FG[1], FG[2], 26);
+      g.text(header, width / 2, height / 2);
+      g.pop();
+
+      if (random() < 0.05) {
+        const y = PAD + 24 + random(-10, 42);
+        const h = random(1, 2);
+        g.fill(FG[0], FG[1], FG[2], 32);
+        g.rect(0, y, width, h);
+      }
+
+      g.push();
+      g.textFont('Courier New');
+      g.fill(...FG);
+      g.textSize(18);
+      g.text("SEARCHING…", PAD, PAD);
+      g.pop();
+
+      g.push();
+      g.textFont('Courier New');
+      g.fill(FG[0], FG[1], FG[2], 100);
+      g.textSize(12);
+      g.text("NEKO 2000 v1.0" + cursor, PAD, PAD + 40);
+      g.pop();
+
+      // extra green vignette just for landing page
+      g.push();
+      g.noFill();
+      const steps = 14;
+      for (let i = 0; i < steps; i++) {
+        const t = i / (steps - 1);
+        const a = map(t, 0, 1, 0, 45);
+        const padX = width * t * 0.09;
+        const padY = height * t * 0.09;
+        g.stroke(FG[0], FG[1], FG[2], a);
+        g.strokeWeight(1.6);
+        g.rect(padX, padY, width - padX * 2, height - padY * 2, cornerR * (1 - t * 0.4));
+      }
+      g.pop();
+    }
+
+    // ----- LOADING -----
+    function drawLoading(g) {
+      // header
+      g.push();
+      g.textFont('Courier New');
+      g.fill(...FG);
+      g.textSize(18);
+      g.text("SEARCHING…", PAD, PAD);
+      g.pop();
+
+      // horizontal scan bars
+      g.noStroke();
+      for (let i = 0; i < 3; i++) {
+        const y = Math.random() * height;
+        const h = 2 + Math.random() * 3;
+        g.fill(FG[0], FG[1], FG[2], 42 + Math.random() * 46);
+        g.rect(0, y, width, h);
+      }
+
+      // text pool cycling
+      if (millis() - lastSwap > swapDelay) {
+        loadTarget = scramble(pick(pool));
+        loadShown = "";
+        lastSwap = millis();
+      }
+      if (millis() - lastType > typeDelay) {
+        const n = clamp(loadShown.length + 1, 0, loadTarget.length);
+        loadShown = loadTarget.slice(0, n);
+        lastType = millis();
+      }
+
+      // sweeping scan-bar
+      const sweepY = (sin(baseTime * 2.0) * 0.5 + 0.5) * height;
+      g.fill(FG[0], FG[1], FG[2], 26);
+      g.rect(0, sweepY, width, 4);
+
+      const fs = Math.max(18, Math.min(width, height) * 0.05);
+      const s = (loadShown || "…").toUpperCase();
+
+      g.textAlign(CENTER, CENTER);
+      g.textSize(fs);
+
+      // layered glitch text in center
+      g.push();
+      g.textFont('Courier New');
+      const layers = 6;
+      for (let i = layers; i >= 1; i--) {
+        const a = (i / layers) * 90;
+        const jx = (noise(frameCount * 0.12 + i) - 0.5) * 12;
+        const jy = (noise(frameCount * 0.19 - i) - 0.5) * 8;
+
+        const gVar = 200 + i * 8;
+        g.fill(0, gVar, 0, a);
+
+        g.text(
+          s,
+          width / 2 + chromaShift * i * 0.5 + jx,
+          height / 2 + jy
+        );
+      }
+
+      // bright core word
+      g.fill(...FG);
+      g.text(s, width / 2, height / 2);
+      g.pop();
+
+      // coarse dithering grid
+      const gridSize = 8;
+      const boxW = width * 0.7;
+      const boxH = fs * 3;
+      const bx = (width - boxW) / 2;
+      const by = (height - boxH) / 2;
+
+      for (let y = by; y < by + boxH; y += gridSize) {
+        for (let x = bx; x < bx + boxW; x += gridSize) {
+          if (random() < 0.14) {
+            const a = random(28, 80);
+            g.fill(FG[0], FG[1], FG[2], a);
+            g.rect(x, y, gridSize * random(0.3, 0.9), gridSize * random(0.2, 0.7));
+          }
+        }
+      }
+
+      // extra glitchy borders: vertical + horizontal pulses near edges
+      const edgeBursts = 10;
+      for (let i = 0; i < edgeBursts; i++) {
+        const side = random() < 0.5 ? "left" : "right";
+        const x = side === "left" ? random(0, width * 0.08) : random(width * 0.92, width);
+        const h = random(height * 0.05, height * 0.3);
+        const top = random(0, height - h);
+        g.fill(FG[0], FG[1], FG[2], random(60, 150));
+        g.rect(x, top, random(2, 7), h);
+      }
+
+      const topBursts = 6;
+      for (let i = 0; i < topBursts; i++) {
+        const y = random(0, height * 0.06);
+        const w = random(width * 0.1, width * 0.6);
+        const x = random(0, width - w);
+        g.fill(FG[0], FG[1], FG[2], random(50, 130));
+        g.rect(x, y, w, random(2, 6));
+      }
+
+      const bottomBursts = 6;
+      for (let i = 0; i < bottomBursts; i++) {
+        const y = random(height * 0.94, height);
+        const w = random(width * 0.1, width * 0.6);
+        const x = random(0, width - w);
+        g.fill(FG[0], FG[1], FG[2], random(50, 130));
+        g.rect(x, y, w, random(2, 6));
+      }
+
+      g.textAlign(LEFT, TOP);
+    }
+
+    // ----- SHOW (final fortune) -----
+    function drawShow(g) {
+      g.textAlign(CENTER, CENTER);
+
+      const fs = Math.max(18, Math.min(width, height) * SIZE_SCALE);
+      g.textSize(fs);
+      g.textLeading(fs * LINE_HEIGHT_MULT);
+
+      const maxW = width * 0.9;
+      const boxH = height * 0.9;
+      const x = (width - maxW) / 2;
+      const y = (height - boxH) / 2;
+
+      const now = millis();
+      if (typingIdx < finalText.length && now - lastTypeStep >= TYPE_DELAY) {
+        const steps = Math.max(1, Math.floor((now - lastTypeStep) / TYPE_DELAY));
+        typingIdx = Math.min(finalText.length, typingIdx + steps);
+        typedText = finalText.slice(0, typingIdx);
+        lastTypeStep = now;
+      }
+
+      const isTyping = typingIdx < finalText.length;
+      const cursor = cursorOn ? "_" : " ";
+      const toShow = (isTyping ? typedText : finalText) + cursor;
+
+      // neon glow + chroma split
+      const lines = 7;
+      for (let i = lines; i >= 1; i--) {
+        const a = (i / lines) * 54;
+        g.fill(FG[0], FG[1], FG[2], a);
+        g.text(toShow, x + chromaShift * i * 0.22, y, maxW, boxH);
+      }
+      g.fill(...FG);
+      g.text(toShow, x, y, maxW, boxH);
+
+      // dithered grain INSIDE text
+      textNoiseLayer.clear();
+      textNoiseLayer.noStroke();
+      const dots = Math.floor((width * height) * 0.001);
+      for (let i = 0; i < dots; i++) {
+        const nx = random(x, x + maxW);
+        const ny = random(y, y + boxH);
+        const a = random(12, 32);
+        textNoiseLayer.fill(FG[0], FG[1], FG[2], a);
+        textNoiseLayer.rect(nx, ny, random(1, 2), random(1, 2));
+      }
+
+      textNoiseLayer.push();
+      textNoiseLayer.textAlign(CENTER, CENTER);
+      textNoiseLayer.textSize(fs);
+      textNoiseLayer.textLeading(fs * LINE_HEIGHT_MULT);
+      textNoiseLayer.fill(255);
+      textNoiseLayer.drawingContext.globalCompositeOperation = 'destination-in';
+      textNoiseLayer.text(toShow, x, y, maxW, boxH);
+      textNoiseLayer.drawingContext.globalCompositeOperation = 'source-over';
+      textNoiseLayer.pop();
+
+      g.image(textNoiseLayer, 0, 0);
+
+      g.textAlign(LEFT, TOP);
+    }
+
+    // ====== GLITCH SLICES ======
+    function sliceGlitch(g, phase) {
+      const chance =
+        phase === "loading" ? 0.55 :
+        phase === "show"    ? 0.12 :
+                              0.10;
+
+      if (random() > chance) return;
+
+      const slices = phase === "loading" ? 5 : 2;
+      for (let i = 0; i < slices; i++) {
+        let y;
+        // bias more glitches to top/bottom borders during loading
+        if (phase === "loading" && random() < 0.7) {
+          const top = random() < 0.5;
+          y = top ? random(0, height * 0.2) : random(height * 0.8, height);
+        } else {
+          y = random(height * 0.15, height * 0.85);
+        }
+
+        const h = random(4, 20);
+        const xOff = random([-1, 1]) * random(2, 18);
+
+        const strip = g.get(0, y, width, h);
+        g.image(strip, xOff, y);
+
+        g.tint(FG[0], FG[1], FG[2], 140);
+        g.image(strip, xOff * 0.5, y);
+        g.noTint();
+
+        g.fill(FG[0], FG[1], FG[2], 22);
+        g.rect(0, y + h - 1, width, 1);
+      }
+    }
+
+    // ====== NOISE ======
+    function redrawNoise() {
+      noiseG.loadPixels();
+      for (let i = 0; i < noiseG.pixels.length; i += 4) {
+        const v = random() < 0.028 ? random(230, 255) : 0;
+        noiseG.pixels[i + 0] = v;
+        noiseG.pixels[i + 1] = v;
+        noiseG.pixels[i + 2] = v;
+        noiseG.pixels[i + 3] = v > 0 ? 90 : 0;
+      }
+      noiseG.updatePixels();
+      noiseNeedsRedraw = false;
+    }
+
+    // ====== COMPOSITE TO CRT WITH BEZEL ======
+    function compositeToCRT(screen, overlay, grain) {
+      drawingContext.save();
+      pathRoundedRect(drawingContext, 0, 0, width, height, cornerR);
+      drawingContext.clip();
+
+      image(screen, 0, 0);
+
+      drawingContext.globalAlpha = flicker;
+      image(overlay, 0, 0);
+      drawingContext.globalAlpha = 1;
+
+      drawingContext.globalAlpha = 0.26;
+      image(grain, 0, 0);
+      drawingContext.globalAlpha = 1;
+
+      drawingContext.restore();
+
+      drawingContext.save();
+      drawingContext.shadowBlur = bezelGlow;
+      drawingContext.shadowColor = 'rgba(34,255,0,0.65)';
+      drawingContext.lineWidth = 3;
+      drawingContext.strokeStyle = 'rgba(34,255,0,0.85)';
+      pathRoundedRect(drawingContext, 1.5, 1.5, width - 3, height - 3, cornerR);
+      drawingContext.stroke();
+      drawingContext.restore();
+
+      const barH = height * 0.08;
+      noStroke();
+      for (let i = 0; i < 18; i++) {
+        const t = i / 17;
+        const a = 4 + 16 * t;
+        fill(0, 0, 0, a);
+        rect(0, -barH + t * barH, width, 2);
+        rect(0, height - (t * barH), width, 2);
+      }
+    }
+
+    function pathRoundedRect(ctx, x, y, w, h, r) {
+      const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr);
+      ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr);
+      ctx.closePath();
+    }
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,311 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Control Panel</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { height:100%; margin:0; background:#000; }
+      body {
+        display:grid; place-items:center;
+        font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Arial;
+        color:#fff; overflow:hidden;
+      }
+
+      #wrap { display:flex; flex-direction:column; align-items:center; gap:14px; }
+      #status { display:none; } /* hidden */
+
+      /* Neon round button */
+      .btn {
+        position: relative;
+        width: 72vw; max-width: 420px;
+        aspect-ratio: 1/1;
+        border: none; border-radius: 999px;
+        background: #00ff08;
+        cursor: pointer;
+        box-shadow:
+          0 8px 28px rgba(0,255,156,0.45),
+          inset 0 -10px 18px rgba(0,0,0,0.25),
+          0 0 40px rgba(0,255,156,0.35);
+        transition: transform .12s ease, opacity .24s ease, background .12s ease, box-shadow .12s ease;
+        user-select: none; touch-action: manipulation;
+      }
+      .btn:active { transform: scale(0.98); }
+
+      /* fade button out while pixels march away */
+      .btn--vanish {
+        opacity: 0.0;
+        box-shadow:
+          0 0 24px rgba(0,255,156,0.35),
+          0 0 60px rgba(0,255,156,0.25);
+      }
+
+      /* full-screen canvas so pixels can travel off the button */
+      .gridburst-canvas {
+        position: fixed; inset: 0;
+        width: 100vw; height: 100vh;
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      /* optional gentle VHS lines */
+      .vhs-overlay {
+        pointer-events: none;
+        position: fixed; inset: 0;
+        mix-blend-mode: screen;
+        opacity: .06;
+        background:
+          repeating-linear-gradient(
+            to bottom,
+            rgba(0,255,156,0.12) 0px,
+            rgba(0,255,156,0.12) 1px,
+            transparent 2px,
+            transparent 3px
+          );
+        animation: barShift 6s linear infinite;
+        z-index: 5;
+      }
+      @keyframes barShift { 0%{transform:translateY(0)} 100%{transform:translateY(3px)} }
+    </style>
+  </head>
+  <body>
+    <div class="vhs-overlay"></div>
+
+    <!-- full-screen grid mover -->
+    <canvas id="gridburst" class="gridburst-canvas"></canvas>
+
+    <div id="wrap">
+      <button id="trigger" class="btn" aria-label="Trigger"></button>
+      <div id="status"></div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+      /************ socket wiring ************/
+      const params = new URLSearchParams(location.search);
+      const wsURL = params.get('ws') || location.origin;
+      const ioClient = io(wsURL, { transports: ['websocket','polling'] });
+
+      /************ elements ************/
+      const btn  = document.getElementById('trigger');
+      const cvs  = document.getElementById('gridburst');
+      const ctx  = cvs.getContext('2d');
+
+      /************ knobs (tweak me) ************/
+      const GRID_PX        = 18;   // size of one grid cell in CSS px
+      const STEP_MS        = 60;   // time to traverse one cell
+      const TURN_CHANCE    = 0.18; // chance to take a right-angle turn each cell
+      const BIAS_OUTWARD   = 0.75; // 0..1 bias to move away from center versus random turn
+      const TRAIL_LEN      = 3;    // how many previous positions to keep for a tiny trail
+      const TILE_MIN       = 4;    // square tile min size (drawn inside grid cell)
+      const TILE_MAX       = 10;   // square tile max size
+      const COLOR_VARIANCE = 55;   // green channel randomness (200..200+N)
+      const ALPHA_SOLID    = 0.95; // base opacity (stay bright)
+
+      /************ canvas sizing ************/
+      function fitCanvas() {
+        const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+        cvs.width  = Math.floor(window.innerWidth  * dpr);
+        cvs.height = Math.floor(window.innerHeight * dpr);
+        cvs.style.width  = window.innerWidth + 'px';
+        cvs.style.height = window.innerHeight + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      fitCanvas();
+      window.addEventListener('resize', fitCanvas);
+
+      /************ helpers ************/
+      function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+      function sign(n){ return n < 0 ? -1 : (n > 0 ? 1 : 0); }
+
+      // returns the nearest grid-snapped point for (x,y)
+      function snapToGrid(x, y){
+        const gx = Math.round(x / GRID_PX) * GRID_PX;
+        const gy = Math.round(y / GRID_PX) * GRID_PX;
+        return [gx, gy];
+      }
+
+      // choose axis-aligned step direction with outward bias
+      function chooseDir(px, py, cx, cy) {
+        const dx = sign(px - cx);
+        const dy = sign(py - cy);
+
+        // primary axis = whichever has the larger absolute delta
+        const preferX = Math.abs(px - cx) >= Math.abs(py - cy);
+
+        if (Math.random() < BIAS_OUTWARD) {
+          // move outward along the dominant axis most of the time
+          if (preferX && dx !== 0) return [dx, 0];
+          if (!preferX && dy !== 0) return [0, dy];
+        }
+
+        // or a random right-angle turn
+        if (Math.random() < 0.5) {
+          if (dx !== 0) return [0, (Math.random() < 0.5 ? -1 : 1)];
+          if (dy !== 0) return [(Math.random() < 0.5 ? -1 : 1), 0];
+        }
+
+        // fallback: move outward on any available axis
+        if (dx === 0 && dy === 0) return [ (Math.random()<0.5?1:-1), 0 ];
+        return preferX ? [dx || (Math.random()<0.5?1:-1), 0]
+                       : [0, dy || (Math.random()<0.5?1:-1)];
+      }
+
+      /************ particle model (grid runner) ************/
+      class Runner {
+        constructor(x, y, size, color, centerX, centerY) {
+          // snap initial position to grid
+          const [sx, sy] = snapToGrid(x, y);
+          this.x = sx; this.y = sy;
+          this.size = size;
+          this.color = color;
+          this.cx = centerX; this.cy = centerY;
+
+          // decide first target cell
+          const [dx, dy] = chooseDir(this.x, this.y, this.cx, this.cy);
+          this.dx = dx; this.dy = dy;
+
+          this.fromX = this.x; this.fromY = this.y;
+          this.toX = this.x + this.dx * GRID_PX;
+          this.toY = this.y + this.dy * GRID_PX;
+          this.t = 0; // 0..1 progress across current cell
+          this.alive = true;
+
+          // short trail of previous snapped points
+          this.trail = [{x: this.x, y: this.y}];
+        }
+
+        step(dt) {
+          if (!this.alive) return;
+
+          this.t += dt / STEP_MS; // dt in ms
+          if (this.t >= 1) {
+            // snap to destination cell
+            this.x = this.toX; this.y = this.toY;
+            this.t = 0;
+
+            // record trail (snap)
+            this.trail.push({x: this.x, y: this.y});
+            if (this.trail.length > TRAIL_LEN) this.trail.shift();
+
+            // if off screen, die
+            if (this.x < -GRID_PX || this.y < -GRID_PX ||
+                this.x > window.innerWidth + GRID_PX ||
+                this.y > window.innerHeight + GRID_PX) {
+              this.alive = false;
+              return;
+            }
+
+            // choose the next 90° step
+            const next = chooseDir(this.x, this.y, this.cx, this.cy);
+
+            // occasionally force a bend (gridy chaos)
+            if (Math.random() < TURN_CHANCE) {
+              // rotate 90° relative to current dir
+              const tx = this.dx, ty = this.dy;
+              this.dx = (ty !== 0) ? (Math.random()<0.5?1:-1) : 0;
+              this.dy = (tx !== 0) ? (Math.random()<0.5?1:-1) : 0;
+            } else {
+              this.dx = next[0]; this.dy = next[1];
+            }
+
+            this.fromX = this.x; this.fromY = this.y;
+            this.toX = this.x + this.dx * GRID_PX;
+            this.toY = this.y + this.dy * GRID_PX;
+          }
+        }
+
+        draw(ctx) {
+          if (!this.alive) return;
+
+          // interpolate along the grid edge
+          const ix = this.fromX + (this.toX - this.fromX) * this.t;
+          const iy = this.fromY + (this.toY - this.fromY) * this.t;
+
+          // main tile (solid)
+          ctx.fillStyle = this.color;
+          ctx.fillRect(Math.round(ix - this.size/2), Math.round(iy - this.size/2), this.size, this.size);
+
+          // tiny trailing ghosts (grid-snapped, lighter)
+          for (let i = 0; i < this.trail.length - 1; i++) {
+            const p = this.trail[i];
+            ctx.fillStyle = this.color.replace(/,([^,]+)\)$/, (_, a) => `,${(+a)*0.35})`);
+            ctx.fillRect(p.x - this.size/2, p.y - this.size/2, this.size, this.size);
+          }
+        }
+      }
+
+      let runners = [];
+      let raf = null;
+
+      function spawnRunnersFromButton() {
+        // 1) emit to server
+        ioClient.emit('control:update', { cmd: 'trigger', t: Date.now() });
+
+        // 2) visually hide the button while tiles march out
+        btn.classList.add('btn--vanish');
+
+        // button geometry
+        const rect = btn.getBoundingClientRect();
+        const cx = rect.left + rect.width/2;
+        const cy = rect.top  + rect.height/2;
+        const radius = Math.min(rect.width, rect.height)/2;
+
+        // sample a grid over the button circle and spawn one runner per grid cell
+        const cols = Math.ceil(rect.width  / GRID_PX);
+        const rows = Math.ceil(rect.height / GRID_PX);
+
+        runners = [];
+        for (let gy = 0; gy <= rows; gy++) {
+          for (let gx = 0; gx <= cols; gx++) {
+            const px = rect.left + gx * GRID_PX;
+            const py = rect.top  + gy * GRID_PX;
+
+            const dx = px - cx, dy = py - cy;
+            if (dx*dx + dy*dy > radius*radius) continue; // outside the circle
+
+            const size = Math.floor(TILE_MIN + Math.random() * (TILE_MAX - TILE_MIN));
+            const green = 200 + Math.floor(Math.random() * COLOR_VARIANCE);
+            const color = `rgba(0,255,${green},${ALPHA_SOLID})`;
+
+            runners.push(new Runner(px, py, size, color, cx, cy));
+          }
+        }
+
+        // animate
+        cancelAnimationFrame(raf);
+        let last = performance.now();
+        function loop(now){
+          const dt = now - last; last = now;
+          ctx.clearRect(0, 0, cvs.width, cvs.height);
+
+          let alive = 0;
+          for (const r of runners) {
+            r.step(dt);
+            r.draw(ctx);
+            if (r.alive) alive++;
+          }
+
+          if (alive > 0) {
+            raf = requestAnimationFrame(loop);
+          } else {
+            // bring button back at the end
+            btn.classList.remove('btn--vanish');
+          }
+        }
+        raf = requestAnimationFrame(loop);
+      }
+
+      // Click → grid burst
+      btn.addEventListener('click', spawnRunnersFromButton);
+
+      // Safety on resize
+      window.addEventListener('resize', () => {
+        cancelAnimationFrame(raf);
+        ctx.clearRect(0, 0, cvs.width, cvs.height);
+        btn.classList.remove('btn--vanish');
+      });
+    </script>
+  </body>
+</html>
