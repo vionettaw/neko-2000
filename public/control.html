@@ -2,7 +2,10 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <title>Control Panel</title>
     <style>
       :root { color-scheme: dark; }
@@ -35,12 +38,14 @@
         overflow: hidden;
       }
 
-      /* 16:9 terminal frame */
+      /* 16:9 terminal frame – always fully visible, no crop */
       #frame {
         position: relative;
-        width: 100vw;
-        max-height: 100vh;
         aspect-ratio: 16 / 9;
+        /* pick the largest width that still keeps height <= 100vh */
+        width: min(100vw, calc(100vh * (16 / 9)));
+        max-height: 100vh;
+
         border: 2px solid var(--term-fg);
         box-sizing: border-box;
         padding: 16px;
@@ -66,7 +71,7 @@
 
       #status { display:none; }
 
-      /* SUPER BIG text – really filling the box */
+      /* SUPER BIG text – desktop / big screens */
       .title {
         position: relative;
         max-width: 96%;
@@ -258,6 +263,28 @@
       @keyframes barShift {
         0%   { transform: translateY(0); }
         100% { transform: translateY(3px); }
+      }
+
+      /* ===== iPhone X / short screens (landscape) – keep everything visible ===== */
+      @media (max-height: 450px) {
+        #frame {
+          padding: 10px;
+        }
+
+        #wrap {
+          gap: 12px;
+        }
+
+        /* scale text to height so it doesn't get cropped */
+        .title {
+          font-size: 9vh;
+          line-height: 1.02;
+        }
+
+        .btn {
+          width: 14vh;
+          max-width: 160px;
+        }
       }
     </style>
   </head>
