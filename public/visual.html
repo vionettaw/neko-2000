@@ -96,8 +96,6 @@
       playsinline
     >
       <source src="https://www.dropbox.com/scl/fi/mcds6ml4wzk8g2x1ccyjl/1201-1.mp4?rlkey=ck14kaepyn2x9chjilob0us2f&raw=1" type="video/mp4" />
-      
-
     </video>
     <!-- p5 canvas will be injected here via cnv.parent('rotator') -->
   </div>
@@ -510,19 +508,10 @@
 
     // ----- IDLE -----
     function drawIdle(g) {
-      const header = "VVERK";
       const cursor = cursorOn ? "_" : " ";
 
-      const fs = Math.max(36, Math.min(width, height) * 0.98);
-
-      g.push();
-      g.textAlign(CENTER, CENTER);
-      g.textSize(fs);
-      g.fill(FG[0], FG[1], FG[2], 26);
-      g.text(header, width / 2, height / 2);
-      g.pop();
-
-      if (random() < 0.05) {
+      // subtle random scanline
+      if (random() < 0.03) {
         const y = PAD + 24 + random(-10, 42);
         const h = random(1, 2);
         g.fill(FG[0], FG[1], FG[2], 32);
@@ -543,7 +532,7 @@
       g.text("NEKO 2000 v1.0" + cursor, PAD, PAD + 40);
       g.pop();
 
-      // extra green vignette just for landing page
+      // green vignette only, no big title
       g.push();
       g.noFill();
       const steps = 14;
@@ -571,10 +560,10 @@
 
       // horizontal scan bars
       g.noStroke();
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 2; i++) {
         const y = Math.random() * height;
-        const h = 2 + Math.random() * 3;
-        g.fill(FG[0], FG[1], FG[2], 42 + Math.random() * 46);
+        const h = 2 + Math.random() * 2;
+        g.fill(FG[0], FG[1], FG[2], 32 + Math.random() * 36);
         g.rect(0, y, width, h);
       }
 
@@ -592,8 +581,8 @@
 
       // sweeping scan-bar
       const sweepY = (sin(baseTime * 2.0) * 0.5 + 0.5) * height;
-      g.fill(FG[0], FG[1], FG[2], 26);
-      g.rect(0, sweepY, width, 4);
+      g.fill(FG[0], FG[1], FG[2], 20);
+      g.rect(0, sweepY, width, 3);
 
       const fs = Math.max(18, Math.min(width, height) * 0.05);
       const s = (loadShown || "…").toUpperCase();
@@ -604,18 +593,18 @@
       // layered glitch text in center
       g.push();
       g.textFont('Courier New');
-      const layers = 6;
+      const layers = 4;
       for (let i = layers; i >= 1; i--) {
-        const a = (i / layers) * 90;
-        const jx = (noise(frameCount * 0.12 + i) - 0.5) * 12;
-        const jy = (noise(frameCount * 0.19 - i) - 0.5) * 8;
+        const a = (i / layers) * 70;
+        const jx = (noise(frameCount * 0.12 + i) - 0.5) * 8;
+        const jy = (noise(frameCount * 0.19 - i) - 0.5) * 6;
 
-        const gVar = 200 + i * 8;
+        const gVar = 200 + i * 6;
         g.fill(0, gVar, 0, a);
 
         g.text(
           s,
-          width / 2 + chromaShift * i * 0.5 + jx,
+          width / 2 + chromaShift * i * 0.4 + jx,
           height / 2 + jy
         );
       }
@@ -624,52 +613,6 @@
       g.fill(...FG);
       g.text(s, width / 2, height / 2);
       g.pop();
-
-      // coarse dithering grid
-      const gridSize = 8;
-      const boxW = width * 0.7;
-      const boxH = fs * 3;
-      const bx = (width - boxW) / 2;
-      const by = (height - boxH) / 2;
-
-      for (let y = by; y < by + boxH; y += gridSize) {
-        for (let x = bx; x < bx + boxW; x += gridSize) {
-          if (random() < 0.14) {
-            const a = random(28, 80);
-            g.fill(FG[0], FG[1], FG[2], a);
-            g.rect(x, y, gridSize * random(0.3, 0.9), gridSize * random(0.2, 0.7));
-          }
-        }
-      }
-
-      // extra glitchy borders: vertical + horizontal pulses near edges
-      const edgeBursts = 10;
-      for (let i = 0; i < edgeBursts; i++) {
-        const side = random() < 0.5 ? "left" : "right";
-        const x = side === "left" ? random(0, width * 0.08) : random(width * 0.92, width);
-        const h = random(height * 0.05, height * 0.3);
-        const top = random(0, height - h);
-        g.fill(FG[0], FG[1], FG[2], random(60, 150));
-        g.rect(x, top, random(2, 7), h);
-      }
-
-      const topBursts = 6;
-      for (let i = 0; i < topBursts; i++) {
-        const y = random(0, height * 0.06);
-        const w = random(width * 0.1, width * 0.6);
-        const x = random(0, width - w);
-        g.fill(FG[0], FG[1], FG[2], random(50, 130));
-        g.rect(x, y, w, random(2, 6));
-      }
-
-      const bottomBursts = 6;
-      for (let i = 0; i < bottomBursts; i++) {
-        const y = random(height * 0.94, height);
-        const w = random(width * 0.1, width * 0.6);
-        const x = random(0, width - w);
-        g.fill(FG[0], FG[1], FG[2], random(50, 130));
-        g.rect(x, y, w, random(2, 6));
-      }
 
       g.textAlign(LEFT, TOP);
     }
@@ -738,14 +681,16 @@
 
     // ====== GLITCH SLICES ======
     function sliceGlitch(g, phase) {
+      // lowered probabilities for softer glitches
       const chance =
-        phase === "loading" ? 0.55 :
-        phase === "show"    ? 0.12 :
-                              0.10;
+        phase === "loading" ? 0.25 :
+        phase === "show"    ? 0.06  :
+                              0.04;
 
       if (random() > chance) return;
 
-      const slices = phase === "loading" ? 5 : 2;
+      // fewer slices overall
+      const slices = phase === "loading" ? 3 : 1;
       for (let i = 0; i < slices; i++) {
         let y;
         // bias more glitches to top/bottom borders during loading
@@ -757,16 +702,16 @@
         }
 
         const h = random(4, 20);
-        const xOff = random([-1, 1]) * random(2, 18);
+        const xOff = random([-1, 1]) * random(2, 12);
 
         const strip = g.get(0, y, width, h);
         g.image(strip, xOff, y);
 
-        g.tint(FG[0], FG[1], FG[2], 140);
-        g.image(strip, xOff * 0.5, y);
+        g.tint(FG[0], FG[1], FG[2], 120);
+        g.image(strip, xOff * 0.4, y);
         g.noTint();
 
-        g.fill(FG[0], FG[1], FG[2], 22);
+        g.fill(FG[0], FG[1], FG[2], 18);
         g.rect(0, y + h - 1, width, 1);
       }
     }
@@ -775,11 +720,11 @@
     function redrawNoise() {
       noiseG.loadPixels();
       for (let i = 0; i < noiseG.pixels.length; i += 4) {
-        const v = random() < 0.028 ? random(230, 255) : 0;
+        const v = random() < 0.02 ? random(230, 255) : 0;
         noiseG.pixels[i + 0] = v;
         noiseG.pixels[i + 1] = v;
         noiseG.pixels[i + 2] = v;
-        noiseG.pixels[i + 3] = v > 0 ? 90 : 0;
+        noiseG.pixels[i + 3] = v > 0 ? 80 : 0;
       }
       noiseG.updatePixels();
       noiseNeedsRedraw = false;
