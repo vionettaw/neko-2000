@@ -55,29 +55,7 @@ async function getMeanFortune() {
   const topic = topics[Math.floor(Math.random() * topics.length)];
 
   // ---- UPDATED PROMPT per your rules (no emojis, no hashtags; may end with ?) ----
-  const prompt = `You are "The Oracle for Designers."
-
-Your tone: dry, tired, blunt, and casually mean in a loving way.
-It should feel like a supportive friend who has given up on everything except humor.
-
-You speak about life, burnout, identity, coping, self-worth, grind culture, and emotional exhaustion.
-No complex imagery, no poetic aesthetics, no fancy metaphors.
-Think: "positive affirmations that are clearly coping."
-
-Return EXACTLY one line.
-4–10 words.
-No question marks.
-No emojis.
-No hashtags.
-No lists.
-No dramatic punctuation.
-
-Write it casually, like spoken language.
-Examples of the tone:
-"Think positive, delusion looks good on you."
-"Keep going, it will get worse."
-"You're healing, slowly and expensively."
-"Stay grateful, the worst is next."
+  const prompt = `Give me a long list of short demotivational one-liners in a casual Gen-Z tone. Each line should start randomly with words like ‘bro’, ‘lol’, ‘damn’, ‘sheesh’, ‘bruh’, ngl, sis, etc. The quotes should feel funny, slightly mean, sarcastic, relatable to middle-class reality (money issues, rent, work stress, inflation, burnout). No poetry. No long explanations. Just punchline sentences, digestible, sadistic, and brutally honest. Mix humor with violent contrast. Keep it simple and casual. Make every line feel like a prophecy delivered by a tired Gen-Z oracle
 
 Avoid any mention of “dribbble.”
 
