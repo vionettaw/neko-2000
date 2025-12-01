@@ -40,7 +40,7 @@
       position: relative;
       width: 100vh;
       height: 100vw;
-      transform: rotate(-90deg);          /* rotate 90° anti-clockwise */
+      transform: rotate(-90deg);
       transform-origin: center center;
       overflow: hidden;
       display: flex;
@@ -48,7 +48,7 @@
       justify-content: center;
     }
 
-    /* Background video DOM node (used as texture only, not visibly shown) */
+    /* Background video DOM node (used only as texture for p5) */
     .bg-video {
       position: absolute;
       top: 50%;
@@ -87,15 +87,8 @@
   <!-- 🔄 wrap visuals in rotated container -->
   <div class="rotator" id="rotator">
     <!-- 🔥 Background video source -->
-      <video
-    id="bg-video"
-    class="bg-video"
-    autoplay
-    muted
-    loop
-    playsinline
-  >
-    <source src="/videos/neko.mp4" type="video/mp4" />
+    <video id="bg-video" class="bg-video" autoplay muted loop playsinline>
+      <source src="/videos/neko.mp4" type="video/mp4" />
     </video>
     <!-- p5 canvas will be injected here via cnv.parent('rotator') -->
   </div>
@@ -177,7 +170,6 @@
       "Mau jelas, dunia blur."
     ];
 
-    // chance to use manual fortune instead of AI (0.0–1.0)
     const MANUAL_PROB = 0.4;
 
     // --- p5 font handle ---
@@ -265,7 +257,7 @@
 
     // 🔔 IDLE TIMEOUT: go back to idle if no activity for 1 minute
     let idleTimer = null;
-    const IDLE_TIMEOUT_MS = 60 * 1000; // 1 minute
+    const IDLE_TIMEOUT_MS = 15 * 1000; // 1 minute
 
     function resetIdleTimer() {
       if (idleTimer) clearTimeout(idleTimer);
@@ -366,20 +358,20 @@
       overlayG.pixelDensity(1);
       overlayG.clear();
 
-      // scanlines
+      // scanlines (✨ slightly softer)
       overlayG.noStroke();
       for (let y = 0; y < height; y += 2) {
-        const a = 36 + 6 * Math.sin(y * 0.02);
+        const a = 20 + 4 * Math.sin(y * 0.02);  // softer alpha
         overlayG.fill(FG[0], FG[1], FG[2], a);
         overlayG.rect(0, y, width, 1);
       }
 
-      // vignette (dark bezel, reused in all states)
+      // vignette (dark bezel, reused in all states) – softened a bit
       overlayG.noFill();
       const steps = 20;
       for (let i = 0; i < steps; i++) {
         const t = i / (steps - 1);
-        const a = map(t, 0, 1, 0, 70);
+        const a = map(t, 0, 1, 0, 45);  // was up to 70
         overlayG.stroke(0, 0, 0, a);
         overlayG.strokeWeight(2);
         const padX = width * t * 0.055;
@@ -440,12 +432,13 @@
 
       const activePhase = trans.active ? trans.to : mode;
 
-      const flickerAmp = (activePhase === "show") ? 0.30 : 0.18;
-      const flickerBase = (activePhase === "show") ? 0.96 : 1.05;
+      // slightly softer flicker
+      const flickerAmp = (activePhase === "show") ? 0.22 : 0.14;
+      const flickerBase = (activePhase === "show") ? 0.98 : 1.02;
       flicker = flickerBase + (noise(frameCount * 0.012) - 0.5) * flickerAmp;
 
-      jitterX = (noise(frameCount * 0.07) - 0.5) * 5.8;
-      chromaShift = (noise(frameCount * 0.03) - 0.5) * 5.3;
+      jitterX = (noise(frameCount * 0.07) - 0.5) * 5.0;
+      chromaShift = (noise(frameCount * 0.03) - 0.5) * 5.0;
 
       if (millis() - lastCursor > 500) {
         cursorOn = !cursorOn;
@@ -457,11 +450,12 @@
       // --- render to offscreen buffer (screenG) ---
       screenG.clear();
 
-      // 1) draw video as background if available
+      // 1) draw video as background if available  🔥 NO ROTATION HERE ANYMORE
       if (bgVideoEl && bgVideoEl.readyState >= 2) {
         const ctx = screenG.drawingContext;
         const vw = bgVideoEl.videoWidth || bgVideoEl.width || 1;
         const vh = bgVideoEl.videoHeight || bgVideoEl.height || 1;
+
         ctx.save();
         ctx.drawImage(
           bgVideoEl,
@@ -489,9 +483,12 @@
       }
       screenG.pop();
 
-      if (frameCount % 5 === 0) noiseNeedsRedraw = true;
+      // film grain less often for perf
+      if (frameCount % 24 === 0) noiseNeedsRedraw = true;
       if (noiseNeedsRedraw) redrawNoise();
 
+      // if you want absolutely max perf, you can return early here
+      // sliceGlitch(screenG, activePhase);  // keep glitches for now
       sliceGlitch(screenG, activePhase);
 
       compositeToCRT(screenG, overlayG, noiseG);
@@ -514,7 +511,7 @@
       if (random() < 0.03) {
         const y = PAD + 24 + random(-10, 42);
         const h = random(1, 2);
-        g.fill(FG[0], FG[1], FG[2], 32);
+        g.fill(FG[0], FG[1], FG[2], 24);  // slightly less alpha
         g.rect(0, y, width, h);
       }
 
@@ -538,7 +535,7 @@
       const steps = 14;
       for (let i = 0; i < steps; i++) {
         const t = i / (steps - 1);
-        const a = map(t, 0, 1, 0, 45);
+        const a = map(t, 0, 1, 0, 35);  // was 45
         const padX = width * t * 0.09;
         const padY = height * t * 0.09;
         g.stroke(FG[0], FG[1], FG[2], a);
@@ -681,19 +678,17 @@
 
     // ====== GLITCH SLICES ======
     function sliceGlitch(g, phase) {
-      // lowered probabilities for softer glitches
+      // even softer probabilities
       const chance =
-        phase === "loading" ? 0.25 :
-        phase === "show"    ? 0.06  :
-                              0.04;
+        phase === "loading" ? 0.18 :
+          phase === "show" ? 0.04 :
+            0.02;
 
       if (random() > chance) return;
 
-      // fewer slices overall
-      const slices = phase === "loading" ? 3 : 1;
+      const slices = phase === "loading" ? 2 : 1;
       for (let i = 0; i < slices; i++) {
         let y;
-        // bias more glitches to top/bottom borders during loading
         if (phase === "loading" && random() < 0.7) {
           const top = random() < 0.5;
           y = top ? random(0, height * 0.2) : random(height * 0.8, height);
@@ -701,17 +696,17 @@
           y = random(height * 0.15, height * 0.85);
         }
 
-        const h = random(4, 20);
-        const xOff = random([-1, 1]) * random(2, 12);
+        const h = random(4, 16);
+        const xOff = random([-1, 1]) * random(2, 8);
 
         const strip = g.get(0, y, width, h);
         g.image(strip, xOff, y);
 
-        g.tint(FG[0], FG[1], FG[2], 120);
+        g.tint(FG[0], FG[1], FG[2], 100);
         g.image(strip, xOff * 0.4, y);
         g.noTint();
 
-        g.fill(FG[0], FG[1], FG[2], 18);
+        g.fill(FG[0], FG[1], FG[2], 14);
         g.rect(0, y + h - 1, width, 1);
       }
     }
@@ -720,11 +715,11 @@
     function redrawNoise() {
       noiseG.loadPixels();
       for (let i = 0; i < noiseG.pixels.length; i += 4) {
-        const v = random() < 0.02 ? random(230, 255) : 0;
+        const v = random() < 0.01 ? random(230, 255) : 0;   // less dense
         noiseG.pixels[i + 0] = v;
         noiseG.pixels[i + 1] = v;
         noiseG.pixels[i + 2] = v;
-        noiseG.pixels[i + 3] = v > 0 ? 80 : 0;
+        noiseG.pixels[i + 3] = v > 0 ? 55 : 0;              // lower alpha
       }
       noiseG.updatePixels();
       noiseNeedsRedraw = false;
@@ -742,7 +737,7 @@
       image(overlay, 0, 0);
       drawingContext.globalAlpha = 1;
 
-      drawingContext.globalAlpha = 0.26;
+      drawingContext.globalAlpha = 0.22;   // slightly softer film grain
       image(grain, 0, 0);
       drawingContext.globalAlpha = 1;
 
