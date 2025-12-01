@@ -219,8 +219,6 @@
     // ====== CRT / TERMINAL EFFECT STATE ======
     let screenG;      // main content buffer
     let overlayG;     // scanlines + vignette
-    let noiseG;       // film noise
-    let noiseNeedsRedraw = true;
 
     let flicker = 0;
     let jitterX = 0;
@@ -231,9 +229,6 @@
     // bezel / mask
     let cornerR = 32;
     let bezelGlow = 42;
-
-    // TEXT NOISE for dithered fortune text
-    let textNoiseLayer;
 
     // TRANSITIONS
     let trans = { active: false, from: "idle", to: "idle", t: 1, dur: 420 };
@@ -255,9 +250,9 @@
       }
     }
 
-    // 🔔 IDLE TIMEOUT: go back to idle if no activity for 1 minute
+    // 🔔 IDLE TIMEOUT: go back to idle if no activity for 15 seconds
     let idleTimer = null;
-    const IDLE_TIMEOUT_MS = 15 * 1000; // 1 minute
+    const IDLE_TIMEOUT_MS = 15 * 1000;
 
     function resetIdleTimer() {
       if (idleTimer) clearTimeout(idleTimer);
@@ -358,33 +353,26 @@
       overlayG.pixelDensity(1);
       overlayG.clear();
 
-      // scanlines (✨ slightly softer)
+      // scanlines
       overlayG.noStroke();
       for (let y = 0; y < height; y += 2) {
-        const a = 20 + 4 * Math.sin(y * 0.02);  // softer alpha
+        const a = 20 + 4 * Math.sin(y * 0.02);
         overlayG.fill(FG[0], FG[1], FG[2], a);
         overlayG.rect(0, y, width, 1);
       }
 
-      // vignette (dark bezel, reused in all states) – softened a bit
+      // vignette (dark bezel, reused in all states)
       overlayG.noFill();
       const steps = 20;
       for (let i = 0; i < steps; i++) {
         const t = i / (steps - 1);
-        const a = map(t, 0, 1, 0, 45);  // was up to 70
+        const a = map(t, 0, 1, 0, 45);
         overlayG.stroke(0, 0, 0, a);
         overlayG.strokeWeight(2);
         const padX = width * t * 0.055;
         const padY = height * t * 0.055;
         overlayG.rect(padX, padY, width - padX * 2, height - padY * 2, cornerR);
       }
-
-      noiseG = createGraphics(width, height);
-      noiseG.pixelDensity(1);
-
-      textNoiseLayer = createGraphics(width, height);
-      textNoiseLayer.pixelDensity(1);
-      textNoiseLayer.textFont(oracleFont);
     }
 
     // ====== SOCKET: visual:state handling & timer reset ======
@@ -450,7 +438,7 @@
       // --- render to offscreen buffer (screenG) ---
       screenG.clear();
 
-      // 1) draw video as background if available  🔥 NO ROTATION HERE ANYMORE
+      // 1) draw video as background if available
       if (bgVideoEl && bgVideoEl.readyState >= 2) {
         const ctx = screenG.drawingContext;
         const vw = bgVideoEl.videoWidth || bgVideoEl.width || 1;
@@ -483,15 +471,9 @@
       }
       screenG.pop();
 
-      // film grain less often for perf
-      if (frameCount % 24 === 0) noiseNeedsRedraw = true;
-      if (noiseNeedsRedraw) redrawNoise();
+      // (noise layer removed for performance)
 
-      // if you want absolutely max perf, you can return early here
-      // sliceGlitch(screenG, activePhase);  // keep glitches for now
-      sliceGlitch(screenG, activePhase);
-
-      compositeToCRT(screenG, overlayG, noiseG);
+      compositeToCRT(screenG, overlayG);
     }
 
     function renderPhase(g, which, alpha) {
@@ -511,7 +493,7 @@
       if (random() < 0.03) {
         const y = PAD + 24 + random(-10, 42);
         const h = random(1, 2);
-        g.fill(FG[0], FG[1], FG[2], 24);  // slightly less alpha
+        g.fill(FG[0], FG[1], FG[2], 24);
         g.rect(0, y, width, h);
       }
 
@@ -535,7 +517,7 @@
       const steps = 14;
       for (let i = 0; i < steps; i++) {
         const t = i / (steps - 1);
-        const a = map(t, 0, 1, 0, 35);  // was 45
+        const a = map(t, 0, 1, 0, 35);
         const padX = width * t * 0.09;
         const padY = height * t * 0.09;
         g.stroke(FG[0], FG[1], FG[2], a);
@@ -639,7 +621,7 @@
       const cursor = cursorOn ? "_" : " ";
       const toShow = (isTyping ? typedText : finalText) + cursor;
 
-      // neon glow + chroma split
+      // neon glow + chroma split (kept, cheap)
       const lines = 7;
       for (let i = lines; i >= 1; i--) {
         const a = (i / lines) * 54;
@@ -649,36 +631,12 @@
       g.fill(...FG);
       g.text(toShow, x, y, maxW, boxH);
 
-      // dithered grain INSIDE text
-      textNoiseLayer.clear();
-      textNoiseLayer.noStroke();
-      const dots = Math.floor((width * height) * 0.001);
-      for (let i = 0; i < dots; i++) {
-        const nx = random(x, x + maxW);
-        const ny = random(y, y + boxH);
-        const a = random(12, 32);
-        textNoiseLayer.fill(FG[0], FG[1], FG[2], a);
-        textNoiseLayer.rect(nx, ny, random(1, 2), random(1, 2));
-      }
-
-      textNoiseLayer.push();
-      textNoiseLayer.textAlign(CENTER, CENTER);
-      textNoiseLayer.textSize(fs);
-      textNoiseLayer.textLeading(fs * LINE_HEIGHT_MULT);
-      textNoiseLayer.fill(255);
-      textNoiseLayer.drawingContext.globalCompositeOperation = 'destination-in';
-      textNoiseLayer.text(toShow, x, y, maxW, boxH);
-      textNoiseLayer.drawingContext.globalCompositeOperation = 'source-over';
-      textNoiseLayer.pop();
-
-      g.image(textNoiseLayer, 0, 0);
-
       g.textAlign(LEFT, TOP);
     }
 
     // ====== GLITCH SLICES ======
     function sliceGlitch(g, phase) {
-      // even softer probabilities
+      // still here; if you want max perf we can disable this too
       const chance =
         phase === "loading" ? 0.18 :
           phase === "show" ? 0.04 :
@@ -711,22 +669,8 @@
       }
     }
 
-    // ====== NOISE ======
-    function redrawNoise() {
-      noiseG.loadPixels();
-      for (let i = 0; i < noiseG.pixels.length; i += 4) {
-        const v = random() < 0.01 ? random(230, 255) : 0;   // less dense
-        noiseG.pixels[i + 0] = v;
-        noiseG.pixels[i + 1] = v;
-        noiseG.pixels[i + 2] = v;
-        noiseG.pixels[i + 3] = v > 0 ? 55 : 0;              // lower alpha
-      }
-      noiseG.updatePixels();
-      noiseNeedsRedraw = false;
-    }
-
     // ====== COMPOSITE TO CRT WITH BEZEL ======
-    function compositeToCRT(screen, overlay, grain) {
+    function compositeToCRT(screen, overlay) {
       drawingContext.save();
       pathRoundedRect(drawingContext, 0, 0, width, height, cornerR);
       drawingContext.clip();
@@ -735,10 +679,6 @@
 
       drawingContext.globalAlpha = flicker;
       image(overlay, 0, 0);
-      drawingContext.globalAlpha = 1;
-
-      drawingContext.globalAlpha = 0.22;   // slightly softer film grain
-      image(grain, 0, 0);
       drawingContext.globalAlpha = 1;
 
       drawingContext.restore();
