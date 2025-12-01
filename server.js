@@ -57,6 +57,14 @@ async function getMeanFortune() {
   // ---- UPDATED PROMPT per your rules (no emojis, no hashtags; may end with ?) ----
   const prompt = `Give me a long list of short demotivational one-liners in a casual Gen-Z tone. Each line should start randomly with words like ‘bro’, ‘lol’, ‘damn’, ‘sheesh’, ‘bruh’, ngl, sis, etc. The quotes should feel funny, slightly mean, sarcastic, relatable to middle-class reality (money issues, rent, work stress, inflation, burnout). No poetry. No long explanations. Just punchline sentences, digestible, sadistic, and brutally honest. Mix humor with violent contrast. Keep it simple and casual. Make every line feel like a prophecy delivered by a tired Gen-Z oracle
 
+Return EXACTLY one line.
+4–10 words.
+No question marks.
+No emojis.
+No hashtags.
+No lists.
+No dramatic punctuation.
+
 Avoid any mention of “dribbble.”
 
 Avoid repeating phrasing from recent outputs:
