@@ -38,15 +38,16 @@
         overflow: hidden;
       }
 
-      /* 16:9 terminal frame – always fully visible, no crop */
+      /* iPhone X-ish landscape ratio ~19.5:9 */
       #frame {
         position: relative;
-        aspect-ratio: 16 / 9;
+        aspect-ratio: 19.5 / 9;
         /* pick the largest width that still keeps height <= 100vh */
-        width: min(100vw, calc(100vh * (16 / 9)));
+        width: min(100vw, calc(100vh * (19.5 / 9)));
         max-height: 100vh;
 
         border: 2px solid var(--term-fg);
+        border-radius: 24px;               /* rounded corners */
         box-sizing: border-box;
         padding: 16px;
         display: flex;
@@ -71,18 +72,17 @@
 
       #status { display:none; }
 
-      /* SUPER BIG text – desktop / big screens */
+      /* SUPER BIG text */
       .title {
         position: relative;
         max-width: 96%;
         text-align: center;
         text-transform: uppercase;
-        font-size: 19em;
+        font-size: 19em;      /* as requested */
         line-height: 1.0;
         color: var(--term-fg);
         text-shadow: none;
         text-wrap: balance;
-        /* idle soft flicker */
         animation: idleFlicker 2.6s infinite;
       }
 
@@ -193,11 +193,11 @@
         }
       }
 
-      /* Circular button – neon glow */
+      /* Bigger circular button – neon glow */
       .btn {
         position: relative;
-        width: min(22vh, 22vw);
-        max-width: 260px;
+        width: min(28vh, 28vw);  /* bigger than before */
+        max-width: 320px;
         aspect-ratio: 1 / 1;
         border-radius: 50%;
         border: 2px solid var(--term-fg);
@@ -265,25 +265,25 @@
         100% { transform: translateY(3px); }
       }
 
-      /* ===== iPhone X / short screens (landscape) – keep everything visible ===== */
+      /* Slight safety for very short viewports so nothing totally dies */
       @media (max-height: 450px) {
         #frame {
           padding: 10px;
+          border-radius: 20px;
         }
 
         #wrap {
-          gap: 12px;
+          gap: 14px;
         }
 
-        /* scale text to height so it doesn't get cropped */
+        /* keep it huge but a bit more sane on tiny heights */
         .title {
-          font-size: 9vh;
-          line-height: 1.02;
+          font-size: 14em;
         }
 
         .btn {
-          width: 14vh;
-          max-width: 160px;
+          width: min(24vh, 24vw);
+          max-width: 260px;
         }
       }
     </style>
@@ -292,7 +292,7 @@
     <div class="vhs-overlay"></div>
 
     <div id="frame">
-      <!-- glitch canvas INSIDE 16:9 box -->
+      <!-- glitch canvas INSIDE the rounded "terminal" -->
       <canvas id="gridburst" class="gridburst-canvas"></canvas>
 
       <div id="wrap">
