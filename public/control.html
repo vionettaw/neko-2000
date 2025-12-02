@@ -8,7 +8,7 @@
     />
     <title>Control Panel</title>
     <style>
-      :root { color-scheme: dark; }f
+      :root { color-scheme: dark; }
 
       /* custom font – make sure the path matches your build setup */
       @font-face {
@@ -42,19 +42,18 @@
       #frame {
         position: relative;
         aspect-ratio: 19.5 / 9;
-        /* pick the largest width that still keeps height <= 100vh */
         width: min(100vw, calc(100vh * (19.5 / 9)));
         max-height: 100vh;
 
         border: 2px solid var(--term-fg);
-        border-radius: 24px;               /* rounded corners */
+        border-radius: 24px;
         box-sizing: border-box;
         padding: 16px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        overflow: hidden; /* clip glitches inside box */
+        overflow: hidden;
         background: var(--term-bg);
       }
 
@@ -67,7 +66,7 @@
         align-items: center;
         justify-content: center;
         gap: 24px;
-        z-index: 2; /* above canvas */
+        z-index: 2;
       }
 
       #status { display:none; }
@@ -78,7 +77,8 @@
         max-width: 96%;
         text-align: center;
         text-transform: uppercase;
-        font-size: 10em;      /* as requested */
+        font-family: "OracleMono", ui-monospace, SFMono-Regular, Menlo, Monaco, "Courier New", monospace;
+        font-size: 10em;
         line-height: 1.0;
         color: var(--term-fg);
         text-shadow: none;
@@ -86,20 +86,12 @@
         animation: idleFlicker 2.6s infinite;
       }
 
-      /* base idle flicker (very subtle) */
       @keyframes idleFlicker {
-        0%, 80%, 100% {
-          opacity: 1;
-        }
-        82% {
-          opacity: 0.96;
-        }
-        86% {
-          opacity: 0.99;
-        }
+        0%, 80%, 100% { opacity: 1; }
+        82% { opacity: 0.96; }
+        86% { opacity: 0.99; }
       }
 
-      /* layered noise copies for glitch */
       .title::before,
       .title::after {
         content: attr(data-text);
@@ -111,7 +103,6 @@
         overflow: hidden;
       }
 
-      /* left-offset green slice */
       .title::before {
         text-shadow: -2px 0 rgba(0, 255, 8, 0.7);
         transform: translate(0, 0);
@@ -119,7 +110,6 @@
         animation: noiseShift1 1.8s infinite steps(2, end);
       }
 
-      /* right-offset darker slice */
       .title::after {
         text-shadow: 2px 0 rgba(0, 180, 0, 0.6);
         transform: translate(0, 0);
@@ -127,7 +117,6 @@
         animation: noiseShift2 2s infinite steps(3, end);
       }
 
-      /* when glitching: make those noise layers much stronger & faster */
       .title.glitching::before {
         opacity: 0.45;
         animation-duration: 0.18s;
@@ -138,65 +127,27 @@
         animation-duration: 0.22s;
       }
 
-      /* noisy clip / shift patterns */
       @keyframes noiseShift1 {
-        0% {
-          clip-path: inset(0 0 80% 0);
-          transform: translate(0, 0);
-        }
-        20% {
-          clip-path: inset(10% 0 60% 0);
-          transform: translate(-1px, -1px);
-        }
-        40% {
-          clip-path: inset(35% 0 40% 0);
-          transform: translate(1px, 0);
-        }
-        60% {
-          clip-path: inset(60% 0 20% 0);
-          transform: translate(-1px, 1px);
-        }
-        80% {
-          clip-path: inset(20% 0 65% 0);
-          transform: translate(1px, -1px);
-        }
-        100% {
-          clip-path: inset(0 0 80% 0);
-          transform: translate(0, 0);
-        }
+        0%   { clip-path: inset(0 0 80% 0);  transform: translate(0, 0); }
+        20%  { clip-path: inset(10% 0 60% 0); transform: translate(-1px, -1px); }
+        40%  { clip-path: inset(35% 0 40% 0); transform: translate(1px, 0); }
+        60%  { clip-path: inset(60% 0 20% 0); transform: translate(-1px, 1px); }
+        80%  { clip-path: inset(20% 0 65% 0); transform: translate(1px, -1px); }
+        100% { clip-path: inset(0 0 80% 0);  transform: translate(0, 0); }
       }
 
       @keyframes noiseShift2 {
-        0% {
-          clip-path: inset(70% 0 5% 0);
-          transform: translate(0, 0);
-        }
-        20% {
-          clip-path: inset(40% 0 40% 0);
-          transform: translate(1px, 1px);
-        }
-        40% {
-          clip-path: inset(15% 0 70% 0);
-          transform: translate(-1px, 0);
-        }
-        60% {
-          clip-path: inset(55% 0 25% 0);
-          transform: translate(0, -1px);
-        }
-        80% {
-          clip-path: inset(5% 0 75% 0);
-          transform: translate(1px, -1px);
-        }
-        100% {
-          clip-path: inset(70% 0 5% 0);
-          transform: translate(0, 0);
-        }
+        0%   { clip-path: inset(70% 0 5% 0);  transform: translate(0, 0); }
+        20%  { clip-path: inset(40% 0 40% 0); transform: translate(1px, 1px); }
+        40%  { clip-path: inset(15% 0 70% 0); transform: translate(-1px, 0); }
+        60%  { clip-path: inset(55% 0 25% 0); transform: translate(0, -1px); }
+        80%  { clip-path: inset(5% 0 75% 0);  transform: translate(1px, -1px); }
+        100% { clip-path: inset(70% 0 5% 0);  transform: translate(0, 0); }
       }
 
-      /* Bigger circular button – neon glow */
       .btn {
         position: relative;
-        width: min(28vh, 28vw);  /* bigger than before */
+        width: min(28vh, 28vw);
         max-width: 320px;
         aspect-ratio: 1 / 1;
         border-radius: 50%;
@@ -205,6 +156,7 @@
         cursor: pointer;
         padding: 0;
         outline: none;
+        font-family: "OracleMono", ui-monospace, SFMono-Regular, Menlo, Monaco, "Courier New", monospace;
         transition:
           background 0.08s ease,
           transform 0.06s ease,
@@ -231,17 +183,15 @@
           0 0 30px rgba(0,255,8,0.8);
       }
 
-      /* canvas lives inside frame, fills it */
       .gridburst-canvas {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
         pointer-events: none;
-        z-index: 1; /* under wrap content */
+        z-index: 1;
       }
 
-      /* CRT scanlines overlay (no glow, just subtle texture) */
       .vhs-overlay {
         pointer-events: none;
         position: fixed;
@@ -265,7 +215,6 @@
         100% { transform: translateY(3px); }
       }
 
-      /* Slight safety for very short viewports so nothing totally dies */
       @media (max-height: 450px) {
         #frame {
           padding: 10px;
@@ -276,7 +225,6 @@
           gap: 14px;
         }
 
-        /* keep it huge but a bit more sane on tiny heights */
         .title {
           font-size: 7em;
         }
@@ -292,7 +240,6 @@
     <div class="vhs-overlay"></div>
 
     <div id="frame">
-      <!-- glitch canvas INSIDE the rounded "terminal" -->
       <canvas id="gridburst" class="gridburst-canvas"></canvas>
 
       <div id="wrap">
@@ -304,7 +251,6 @@
           TAP WITH MIDDLE FINGER
         </div>
 
-        <!-- circle button with no inner text -->
         <button
           id="trigger"
           class="btn"
@@ -317,12 +263,10 @@
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-      /************ socket wiring ************/
       const params = new URLSearchParams(location.search);
       const wsURL = params.get('ws') || location.origin;
       const ioClient = io(wsURL, { transports: ['websocket','polling'] });
 
-      /************ elements ************/
       const frame = document.getElementById('frame');
       const btn   = document.getElementById('trigger');
       const cvs   = document.getElementById('gridburst');
@@ -332,11 +276,10 @@
       const ORIGINAL_TEXT = 'TAP WITH MIDDLE FINGER';
       const GLITCH_TEXT   = 'NEKO 2000';
 
-      /************ GLITCH KNOBS (subtle CRT noise) ************/
-      const GLITCH_DURATION   = 450;  // ms of glitch time (short, snappy)
-      const NOISE_DOTS        = 220;  // small specks
-      const NOISE_LINES       = 40;   // soft horizontal lines
-      const SWEEP_LINES       = 3;    // bright scan sweeps
+      const GLITCH_DURATION   = 450;
+      const NOISE_DOTS        = 220;
+      const NOISE_LINES       = 40;
+      const SWEEP_LINES       = 3;
 
       const TERM_R = 0;
       const TERM_G = 255;
@@ -349,7 +292,6 @@
       let glitching = false;
       let glitchStart = 0;
 
-      /************ canvas sizing (inside frame) ************/
       function fitCanvas() {
         const rect = frame.getBoundingClientRect();
         const cssW = rect.width;
@@ -374,27 +316,22 @@
         fitCanvas();
         ctx.clearRect(0, 0, FRAME_W, FRAME_H);
         glitching = false;
-        // reset text state on resize
         titleEl.textContent = ORIGINAL_TEXT;
         titleEl.dataset.text = ORIGINAL_TEXT;
         titleEl.classList.remove('glitching');
       });
 
-      /************ GLITCH DRAWING (subtle CRT) ************/
       function drawGlitchFrame(tNorm) {
-        // tNorm 0..1 : 0 = start (stronger), 1 = end (weaker)
         ctx.clearRect(0, 0, FRAME_W, FRAME_H);
 
-        const intensity = 1 - tNorm; // fades out over time
+        const intensity = 1 - tNorm;
 
-        // base transparent overlay so glitch only slightly tints
         const baseAlpha = 0.08 * intensity;
         if (baseAlpha > 0.01) {
           ctx.fillStyle = `rgba(0,0,0,${baseAlpha})`;
           ctx.fillRect(0, 0, FRAME_W, FRAME_H);
         }
 
-        // 1) soft horizontal noise lines (like CRT row flicker)
         for (let i = 0; i < NOISE_LINES; i++) {
           const y = Math.random() * FRAME_H;
           const h = 1 + Math.random() * 2;
@@ -403,7 +340,6 @@
           ctx.fillRect(0, y, FRAME_W, h);
         }
 
-        // 2) tiny random dots (speckle noise)
         for (let i = 0; i < NOISE_DOTS; i++) {
           const x = Math.random() * FRAME_W;
           const y = Math.random() * FRAME_H;
@@ -414,7 +350,6 @@
           ctx.fillRect(x, y, size, size);
         }
 
-        // 3) a few sweeping bright scan lines
         for (let i = 0; i < SWEEP_LINES; i++) {
           const sweepY = (tNorm + i * 0.33) % 1 * FRAME_H;
           const sweepH = 3 + Math.random() * 2;
@@ -423,7 +358,6 @@
           ctx.fillRect(0, sweepY, FRAME_W, sweepH);
         }
 
-        // 4) very slight vignette darkening at edges for depth
         const edgeAlpha = 0.18 * intensity;
         if (edgeAlpha > 0.01) {
           const grad = ctx.createRadialGradient(
@@ -437,7 +371,6 @@
         }
       }
 
-      /************ RAF LOOP ************/
       function loop(now) {
         if (!glitching) {
           ctx.clearRect(0, 0, FRAME_W, FRAME_H);
@@ -455,7 +388,6 @@
           ctx.clearRect(0, 0, FRAME_W, FRAME_H);
           glitchStart = 0;
 
-          // restore text state
           titleEl.textContent = ORIGINAL_TEXT;
           titleEl.dataset.text = ORIGINAL_TEXT;
           titleEl.classList.remove('glitching');
@@ -466,15 +398,12 @@
         raf = requestAnimationFrame(loop);
       }
 
-      /************ TRIGGER ************/
       function triggerGlitch() {
-        // send to server
         ioClient.emit('control:update', { cmd: 'trigger', t: Date.now() });
 
         glitching = true;
-        glitchStart = 0; // will be set on first loop call
+        glitchStart = 0;
 
-        // swap text to NEKO 2000 and enable extra text glitch style
         titleEl.textContent = GLITCH_TEXT;
         titleEl.dataset.text = GLITCH_TEXT;
         titleEl.classList.add('glitching');
