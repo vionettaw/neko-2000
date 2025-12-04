@@ -43,7 +43,7 @@ const COOLDOWN_MS = 6000;
 let lastCall = 0;
 
 async function getMeanFortune() {
-  const fallback = ["fallback"];
+ const fallback = ["Connection error, blame Famos"];
   if (!hasKey) return fallback[0];
 
   // ---- NEW: safe locals so template literals don’t throw ----
